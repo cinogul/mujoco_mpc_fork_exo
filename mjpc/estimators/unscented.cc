@@ -481,7 +481,7 @@ void Unscented::SigmaCovariances() {
 }
 
 // unscented filter update
-void Unscented::Update(const double* ctrl, const double* sensor) {
+void Unscented::Update(const double* ctrl, const double* sensor, int mode) {
   // start timer
   auto start = std::chrono::steady_clock::now();
 
@@ -634,7 +634,7 @@ void Unscented::GUI(mjUI& ui) {
       {mjITEM_BUTTON, "Reset", 2, nullptr, ""},
       {mjITEM_SLIDERNUM, "Timestep", 2, &gui_timestep_, "1.0e-3 0.1"},
       {mjITEM_SELECT, "Integrator", 2, &gui_integrator_,
-       "Euler\nRK4\nImplicit\nFastImplicit"},
+       "Euler\nRK4\nImplicit\nImplicitFast"},
       {mjITEM_END}};
 
   // add estimator

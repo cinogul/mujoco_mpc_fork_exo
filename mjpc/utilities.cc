@@ -45,6 +45,7 @@
 
 extern "C" {
 #if defined(_WIN32) || defined(__CYGWIN__)
+#define NOMINMAX
 #include <windows.h>
 #else
 #if defined(__APPLE__)
@@ -219,7 +220,7 @@ int CostTermByName(const mjModel* m, const std::string& name) {
   }
 }
 
-void CheckSensorDim(const mjModel* model, int residual_size) {
+int ResidualSize(const mjModel* model) {
   int user_sensor_dim = 0;
   bool encountered_nonuser_sensor = false;
   for (int i = 0; i < model->nsensor; i++) {
@@ -232,6 +233,11 @@ void CheckSensorDim(const mjModel* model, int residual_size) {
       encountered_nonuser_sensor = true;
     }
   }
+  return user_sensor_dim;
+}
+
+void CheckSensorDim(const mjModel* model, int residual_size) {
+  int user_sensor_dim = ResidualSize(model);
   if (user_sensor_dim != residual_size) {
     mju_error(
         "mismatch between total user-sensor dimension %d "
@@ -266,58 +272,13 @@ double* KeyQPosByName(const mjModel* m, const mjData* d,
   int id = mj_name2id(m, mjOBJ_KEY, name.c_str());
   if (id == -1) {
     return nullptr;
-  } else {
-    return m->key_qpos + m->nq * id;
   }
-}
-
-// get keyframe `qvel` data using string
-double* KeyQVelByName(const mjModel* m, const mjData* d,
-                      const std::string& name) {
-  int id = mj_name2id(m, mjOBJ_KEY, name.c_str());
-  if (id == -1) {
-    return nullptr;
-  } else {
-    return m->key_qvel + m->nv * id;
-  }
-}
-
-// get keyframe `qvel` data using string
-double* KeyActByName(const mjModel* m, const mjData* d,
-                     const std::string& name) {
-  int id = mj_name2id(m, mjOBJ_KEY, name.c_str());
-  if (id == -1) {
-    return nullptr;
-  } else {
-    return m->key_act + m->na * id;
-  }
+  return m->key_qpos + m->nq * id;
 }
 
 void LinearRange(double* t, double t_step, double t0, int N) {
   for (int i = 0; i < N; i++) {
     t[i] = t0 + i * t_step;
-  }
-}
-
-// find interval in monotonic sequence containing value
-void FindInterval(int* bounds, const std::vector<double>& sequence,
-                  double value, int length) {
-  // get bounds
-  auto it =
-      std::upper_bound(sequence.begin(), sequence.begin() + length, value);
-  int upper_bound = it - sequence.begin();
-  int lower_bound = upper_bound - 1;
-
-  // set bounds
-  if (lower_bound < 0) {
-    bounds[0] = 0;
-    bounds[1] = 0;
-  } else if (lower_bound > length - 1) {
-    bounds[0] = length - 1;
-    bounds[1] = length - 1;
-  } else {
-    bounds[0] = mju_max(lower_bound, 0);
-    bounds[1] = mju_min(upper_bound, length - 1);
   }
 }
 

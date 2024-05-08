@@ -149,7 +149,8 @@ class CopyTaskAssetsCommand(setuptools.Command):
     self.set_undefined_options("build_ext", ("build_lib", "build_lib"))
 
   def run(self):
-    mjpc_tasks_path = Path(__file__).parent.parent / "mjpc" / "tasks"
+    mjpc_tasks_path = Path(__file__).parent.parent / "build" / "mjpc" / "tasks"
+    assert mjpc_tasks_path.exists(), "Build MJPC before installing Python API"
     source_paths = (
       tuple(mjpc_tasks_path.rglob("*.xml"))
       + tuple(mjpc_tasks_path.rglob("*.png"))
@@ -283,8 +284,10 @@ setuptools.setup(
         "grpcio",
     ],
     install_requires=[
+        "brax",
         "grpcio",
-        "mujoco >= 2.3.3",
+        "mujoco >= 3.1.1",
+        "mujoco-mjx",
         "protobuf",
     ],
     extras_require={

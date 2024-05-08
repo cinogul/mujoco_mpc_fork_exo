@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+from typing import Callable, Optional, Tuple
 
 import mujoco
 import numpy as np
@@ -201,68 +201,18 @@ def inverse_dynamics(
   force = np.zeros((model.nv, horizon))
 
   # loop over horizon
-  for t in range(0, horizon):
-    # first step
-    if t == 0:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = np.zeros(model.nv)
-      data.qacc = np.zeros(model.nv)
+  for t in range(1, horizon - 1):
+    # set data
+    data.qpos = qpos[:, t]
+    data.qvel = qvel[:, t]
+    data.qacc = qacc[:, t]
 
-      # evaluate position sensors
-      mujoco.mj_fwdPosition(model, data)
-      mujoco.mj_sensorPos(model, data)
+    # inverse dynamics
+    mujoco.mj_inverse(model, data)
 
-      # zero memory
-      sensor[:, t] = 0.0
-
-      # set position sensors
-      for i in range(model.nsensor):
-        if model.sensor_needstage[i] == mujoco.mjtStage.mjSTAGE_POS:
-          adr = model.sensor_adr[i]
-          dim = model.sensor_dim[i]
-          idx = slice(adr, adr + dim)
-          sensor[idx, t] = data.sensordata[idx]
-
-    # last step
-    elif t == horizon - 1:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = qvel[:, t]
-      data.qacc = np.zeros(model.nv)
-
-      # evaluate position and velocity sensors
-      mujoco.mj_fwdPosition(model, data)
-      mujoco.mj_sensorPos(model, data)
-      mujoco.mj_fwdVelocity(model, data)
-      mujoco.mj_sensorVel(model, data)
-
-      # zero memory
-      sensor[:, t] = 0.0
-
-      # only set position and velocity sensors
-      for i in range(model.nsensor):
-        needstage = model.sensor_needstage[i]
-        if (
-            needstage == mujoco.mjtStage.mjSTAGE_POS
-            or needstage == mujoco.mjtStage.mjSTAGE_VEL
-        ):
-          adr = model.sensor_adr[i]
-          dim = model.sensor_dim[i]
-          idx = slice(adr, adr + dim)
-          sensor[idx, t] = data.sensordata[idx]
-    else:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = qvel[:, t]
-      data.qacc = qacc[:, t]
-
-      # inverse dynamics
-      mujoco.mj_inverse(model, data)
-
-      # copy sensor and force
-      sensor[:, t] = data.sensordata
-      force[:, t] = data.qfrc_inverse
+    # copy sensor and force
+    sensor[:, t] = data.sensordata
+    force[:, t] = data.qfrc_inverse
 
   return sensor, force
 
@@ -319,103 +269,109 @@ def diff_inverse_dynamics(
   dadf = np.zeros((model.nv, model.nv))
 
   # loop over horizon
-  for t in range(0, horizon):
-    # first step
-    if t == 0:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = np.zeros(model.nv)
-      data.qacc = np.zeros(model.nv)
+  for t in range(1, horizon - 1):
+    # set data
+    data.qpos = qpos[:, t]
+    data.qvel = qvel[:, t]
+    data.qacc = qacc[:, t]
 
-      # Jacobian
-      mujoco.mjd_inverseFD(
-          model,
-          data,
-          eps,
-          flg_actuation,
-          None,
-          None,
-          None,
-          dqds,
-          None,
-          None,
-          None,
-      )
+    # Jacobian
+    mujoco.mjd_inverseFD(
+        model,
+        data,
+        eps,
+        flg_actuation,
+        dqdf,
+        dvdf,
+        dadf,
+        dqds,
+        dvds,
+        dads,
+        None,
+    )
 
-      # transpose
-      dsdq[t] = np.transpose(dqds)
-
-      # zero velocity and acceleration sensor derivatives
-      for i in range(model.nsensor):
-        if model.sensor_needstage[i] != mujoco.mjtStage.mjSTAGE_POS:
-          adr = model.sensor_adr[i]
-          dim = model.sensor_dim[i]
-          dsdq[t][adr : (adr + dim), 0 : model.nv] = 0.0
-
-    # last step
-    elif t == horizon - 1:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = qvel[:, t]
-      data.qacc = np.zeros(model.nv)
-
-      # Jacobian
-      mujoco.mjd_inverseFD(
-          model,
-          data,
-          eps,
-          flg_actuation,
-          None,
-          None,
-          None,
-          dqds,
-          dvds,
-          None,
-          None,
-      )
-
-      # transpose
-      dsdq[t] = np.transpose(dqds)
-      dsdv[t] = np.transpose(dvds)
-
-      # zero acceleration sensor derivatives
-      for i in range(model.nsensor):
-        if model.sensor_needstage[i] == mujoco.mjtStage.mjSTAGE_ACC:
-          adr = model.sensor_adr[i]
-          dim = model.sensor_dim[i]
-          idx = slice(adr, adr + dim)
-          dsdq[t][idx, 0 : model.nv] = 0.0
-          dsdv[t][idx, 0 : model.nv] = 0.0
-    else:
-      # set data
-      data.qpos = qpos[:, t]
-      data.qvel = qvel[:, t]
-      data.qacc = qacc[:, t]
-
-      # Jacobian
-      mujoco.mjd_inverseFD(
-          model,
-          data,
-          eps,
-          flg_actuation,
-          dqdf,
-          dvdf,
-          dadf,
-          dqds,
-          dvds,
-          dads,
-          None,
-      )
-
-      # transpose
-      dsdq[t] = np.transpose(dqds)
-      dsdv[t] = np.transpose(dvds)
-      dsda[t] = np.transpose(dads)
-      dfdq[t] = np.transpose(dqdf)
-      dfdv[t] = np.transpose(dvdf)
-      dfda[t] = np.transpose(dadf)
+    # transpose
+    dsdq[t] = np.transpose(dqds)
+    dsdv[t] = np.transpose(dvds)
+    dsda[t] = np.transpose(dads)
+    dfdq[t] = np.transpose(dqdf)
+    dfdv[t] = np.transpose(dvdf)
+    dfda[t] = np.transpose(dadf)
 
   return dfdq, dfdv, dfda, dsdq, dsdv, dsda
+
+
+# %%
+def diff_inverse_dynamics_parameters(
+    model: mujoco.MjModel,
+    model_update: mujoco.MjModel,
+    data: mujoco.MjData,
+    qpos: npt.ArrayLike,
+    qvel: npt.ArrayLike,
+    qacc: npt.ArrayLike,
+    sensor: npt.ArrayLike,
+    force: npt.ArrayLike,
+    parameter: npt.ArrayLike,
+    parameter_update: Callable,
+    horizon: int,
+    eps: Optional[float] = 1.0e-8,
+) -> Tuple[npt.ArrayLike, npt.ArrayLike]:
+  """Inverse dynamics.
+
+  (s, f) <- id(q, v, a, p + e_i)
+
+  Args:
+      model (mujoco.MjModel): MuJoCo model
+      model_update (mujoco.MjModel): MuJoCo model for updating parameters
+      data (mujoco.MjData): MuJoCo data
+      qpos (npt.ArrayLike): trajectory of configurations
+      qvel (npt.ArrayLike): trajectory of velocities
+      qacc (npt.ArrayLike): trajectory of accelerations
+      sensor (npt.ArrayLike): trajectory of sensors
+      force (npt.ArrayLike): trajectory of forces
+      parameter (npt.ArrayLike): nominal parameters
+      horizon (int): number of timesteps
+      eps (float): perturbation size
+
+  Returns:
+      Tuple[npt.ArrayLike, npt.ArrayLike]: sensor and force Jacobians wrt parameters trajectories
+  """
+  # number of parameters
+  num_parameter = len(parameter)
+
+  dsdp = np.array(
+      [np.zeros((model.nsensordata, num_parameter)) for _ in range(horizon)]
+  )
+  dfdp = np.array([np.zeros((model.nv, num_parameter)) for _ in range(horizon)])
+
+  # loop over horizon
+  for t in range(1, horizon - 1):
+    ## nominal
+    # set data
+    data.qpos = qpos[:, t]
+    data.qvel = qvel[:, t]
+    data.qacc = qacc[:, t]
+
+    ## perturb
+    perturb = np.zeros(num_parameter)
+    for i in range(num_parameter):
+      # perturb
+      perturb[i] = eps
+
+      # update model
+      parameter_update(model_update, parameter + perturb)
+
+      # inverse dynamics
+      mujoco.mj_inverse(model_update, data)
+
+      # derivative
+      dsdp[t][:, i] = (data.sensordata - sensor[:, t]) / eps
+      dfdp[t][:, i] = (data.qfrc_inverse - force[:, t]) / eps
+
+      # restore
+      perturb[i] = 0.0
+
+  return dsdp, dfdp
 
 
 # %%
@@ -454,23 +410,12 @@ def diff_sensor(
       np.zeros((model.nsensordata, 3 * model.nv)) for _ in range(horizon)
   ]
   # loop over horizon
-  for t in range(0, horizon):
-    # first step
-    if t == 0:
-      dsdq012[t][:, 0 : model.nv] = 0.0
-      dsdq012[t][:, model.nv : (2 * model.nv)] = dsdq[t]
-      dsdq012[t][:, (2 * model.nv) : (3 * model.nv)] = 0.0
-    # last step
-    elif t == horizon - 1:
-      dsdq012[t][:, 0 : model.nv] = dsdv[t] @ dvdq0[t]
-      dsdq012[t][:, model.nv : (2 * model.nv)] = dsdq[t] + dsdv[t] @ dvdq1[t]
-      dsdq012[t][:, (2 * model.nv) : (3 * model.nv)] = 0.0
-    else:
-      dsdq012[t][:, 0 : model.nv] = dsdv[t] @ dvdq0[t] + dsda[t] @ dadq0[t]
-      dsdq012[t][:, model.nv : (2 * model.nv)] = (
-          dsdq[t] + dsdv[t] @ dvdq1[t] + dsda[t] @ dadq1[t]
-      )
-      dsdq012[t][:, (2 * model.nv) : (3 * model.nv)] = dsda[t] @ dadq2[t]
+  for t in range(1, horizon - 1):
+    dsdq012[t][:, 0 : model.nv] = dsdv[t] @ dvdq0[t] + dsda[t] @ dadq0[t]
+    dsdq012[t][:, model.nv : (2 * model.nv)] = (
+        dsdq[t] + dsdv[t] @ dvdq1[t] + dsda[t] @ dadq1[t]
+    )
+    dsdq012[t][:, (2 * model.nv) : (3 * model.nv)] = dsda[t] @ dadq2[t]
 
   return dsdq012
 
@@ -510,19 +455,12 @@ def diff_force(
   dfdq012 = [np.zeros((model.nv, 3 * model.nv)) for _ in range(horizon)]
 
   # loop over horizon
-  for t in range(horizon):
-    # first step
-    if t == 0:
-      dfdq012[t][:, :] = 0.0
-    # last step
-    elif t == horizon - 1:
-      dfdq012[t][:, :] = 0.0
-    else:
-      dfdq012[t][:, 0 : model.nv] = dfdv[t] @ dvdq0[t] + dfda[t] @ dadq0[t]
-      dfdq012[t][:, model.nv : (2 * model.nv)] = (
-          dfdq[t] + dfdv[t] @ dvdq1[t] + dfda[t] @ dadq1[t]
-      )
-      dfdq012[t][:, (2 * model.nv) : (3 * model.nv)] = dfda[t] @ dadq2[t]
+  for t in range(1, horizon - 1):
+    dfdq012[t][:, 0 : model.nv] = dfdv[t] @ dvdq0[t] + dfda[t] @ dadq0[t]
+    dfdq012[t][:, model.nv : (2 * model.nv)] = (
+        dfdq[t] + dfdv[t] @ dvdq1[t] + dfda[t] @ dadq1[t]
+    )
+    dfdq012[t][:, (2 * model.nv) : (3 * model.nv)] = dfda[t] @ dadq2[t]
 
   return dfdq012
 
@@ -575,29 +513,38 @@ def diff_cost_force(
     weights: npt.ArrayLike,
     dfdq012: npt.ArrayLike,
     horizon: int,
-) -> Tuple[npt.ArrayLike, npt.ArrayLike]:
-  """Force cost (derivatives wrt configurations).
-
-  d cf / d q0,...,qT
+    dfdp: Optional[npt.ArrayLike] = None,
+) -> Tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+  """Force cost (derivatives wrt qpos, parameter).
 
   Args:
       model (mujoco.MjModel): MuJoCo model
       force (npt.ArrayLike): trajectory of forces
       target (npt.ArrayLike): trajectory of force targets
       weights (npt.ArrayLike): trajectory of weights
-      dfdq012 (npt.ArrayLike): trajectory of force derivatives wrt previous, current, and next configurations
+      dfdq012 (npt.ArrayLike): trajectory of force derivatives wrt previous, current, and next qpos
       horizon (int): number of timesteps
+      dfdp (Optional[npt.ArrayLike]): trajectory of force derivatives wrt parameter.
 
   Returns:
-      Tuple[npt.ArrayLike, npt.ArrayLike]: gradient and Hessian of force cost wrt to configurations
+      Tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]: gradient and Hessian of force cost wrt to qpos, parameter
   """
+  # num parameter
+  nparam = 0
+  grad_p = None
+  hess_pq = None
+  if dfdp is not None:
+    nparam = dfdp[1].shape[1]
+    grad_p = np.zeros(nparam)
+    hess_pq = np.zeros((nparam, model.nv * horizon + nparam))
+
   # dimensions
   ntotal = model.nv * horizon
   nband = 3 * model.nv
 
   # derivatives
-  grad = np.zeros(ntotal)
-  hess = np.zeros((ntotal, nband))
+  grad_q = np.zeros(ntotal)
+  hess_qq = np.zeros((ntotal, nband))
 
   # loop over horizon
   for t in range(1, horizon - 1):
@@ -617,15 +564,24 @@ def diff_cost_force(
     idx = slice((t - 1) * model.nv, (t + 2) * model.nv)
 
     # gradient
-    grad[idx] += dfdq012[t].T @ norm_grad
+    grad_q[idx] += (dfdq012[t].T @ norm_grad).ravel()
 
     # Hessian
     blk = dfdq012[t].T @ norm_hess @ dfdq012[t]
-    hess = add_block_in_band(
-        hess, blk, 1.0, ntotal, nband, 3 * model.nv, (t - 1) * model.nv
+    hess_qq = add_block_in_band(
+        hess_qq, blk, 1.0, ntotal, nband, 3 * model.nv, (t - 1) * model.nv
     )
 
-  return grad, hess
+    if nparam > 0:
+      # gradient
+      grad_p[:] += (dfdp[t].T @ norm_grad).ravel()
+
+      # dense rows
+      hess_pq[:, (t - 1) * model.nv : (t + 2) * model.nv] += (
+          dfdp[t].T @ norm_hess @ dfdq012[t]
+      )
+
+  return grad_q, hess_qq, grad_p, hess_pq
 
 
 # %%
@@ -654,18 +610,14 @@ def cost_sensor(
   cost = 0.0
 
   # loop over horizon
-  for t in range(horizon):
+  for t in range(1, horizon - 1):
     # residual
     res = sensor[:, t] - target[:, t]
 
     # loop over sensors
     for i in range(model.nsensor):
-      # skip
+      # stage
       needstage = model.sensor_needstage[i]
-      if t == 0 and needstage != mujoco.mjtStage.mjSTAGE_POS:
-        continue
-      if t == horizon - 1 and needstage == mujoco.mjtStage.mjSTAGE_ACC:
-        continue
 
       # sensor i
       adr = model.sensor_adr[i]
@@ -697,43 +649,48 @@ def diff_cost_sensor(
     weights: npt.ArrayLike,
     dsdq012: npt.ArrayLike,
     horizon: int,
-) -> Tuple[npt.ArrayLike, npt.ArrayLike]:
-  """Sensor cost (derivatives wrt configurations).
-
-  d cs / d q0,...,qT
+    dsdp: Optional[npt.ArrayLike] = None,
+) -> Tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+  """Sensor cost (derivatives wrt qpos, parameter).
 
   Args:
       model (mujoco.MjModel): MuJoCo model
       sensor (npt.ArrayLike): trajectory of sensors
       target (npt.ArrayLike): trajectory of sensor targets
       weights (npt.ArrayLike): trajectory of weights
-      dsdq012 (npt.ArrayLike): trajectory of sensor derivatives wrt previous, current, and next configurations
+      dsdq012 (npt.ArrayLike): trajectory of sensor derivatives wrt previous, current, and next qpos
       horizon (int): number of timesteps
+      dsdp (Optional[npt.ArrayLike]): trajectory of sensor derivatives wrt parameters
 
   Returns:
-      Tuple[npt.ArrayLike, npt.ArrayLike]: gradient and Hessian of total sensor cost wrt configuration
+      Tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]: gradient and Hessian of total sensor cost wrt qpos, parameter
   """
+  # num parameters
+  nparam = 0
+  grad_p = None
+  hess_pq = None
+  if dsdp is not None:
+    nparam = dsdp[1].shape[1]
+    grad_p = np.zeros(nparam)
+    hess_pq = np.zeros((nparam, model.nv * horizon + nparam))
+
   # dimensions
   ntotal = model.nv * horizon
   nband = 3 * model.nv
 
   # derivatives
-  grad = np.zeros(ntotal)
-  hess = np.zeros((ntotal, nband))
+  grad_q = np.zeros(ntotal)
+  hess_qq = np.zeros((ntotal, nband))
 
   # loop over horizon
-  for t in range(horizon):
+  for t in range(1, horizon - 1):
     # residual
     res = sensor[:, t] - target[:, t]
 
     # loop over sensors
     for i in range(model.nsensor):
-      # skip
+      # stage
       needstage = model.sensor_needstage[i]
-      if t == 0 and needstage != mujoco.mjtStage.mjSTAGE_POS:
-        continue
-      if t == horizon - 1 and needstage == mujoco.mjtStage.mjSTAGE_ACC:
-        continue
 
       # adr
       adr = model.sensor_adr[i]
@@ -756,57 +713,32 @@ def diff_cost_sensor(
       # quadratic norm Hessian
       normi_hess = (scale * weights[i, t] * np.eye(dim)).reshape((dim, dim))
 
-      # first step
-      if t == 0:
-        # indices
-        idxt = slice(0, model.nv)
+      # indices
+      idxt = slice((t - 1) * model.nv, (t + 2) * model.nv)
 
-        # subblock
-        dsidq1 = dsdq012[t][idx, model.nv : (2 * model.nv)].reshape(
-            (dim, model.nv)
-        )
+      # subblock
+      dsidq012 = dsdq012[t][idx, :].reshape((dim, 3 * model.nv))
 
+      # gradient
+      grad_q[idxt] += (dsidq012.T @ normi_grad).ravel()
+
+      # Hessian
+      blk = dsidq012.T @ normi_hess @ dsidq012
+      hess_qq = add_block_in_band(
+          hess_qq, blk, 1.0, ntotal, nband, 3 * model.nv, (t - 1) * model.nv
+      )
+
+      # parameters
+      if nparam > 0:
         # gradient
-        grad[idxt] += (dsidq1.T @ normi_grad).ravel()
+        grad_p[:] += (dsdp[t][idx, :].T @ normi_grad).ravel()
 
-        # Hessian
-        blk = dsidq1.T @ normi_hess @ dsidq1
-        hess = add_block_in_band(hess, blk, 1.0, ntotal, nband, model.nv, 0)
-      # last step
-      elif t == horizon - 1:
-        # indices
-        idxt = slice((t - 1) * model.nv, (t + 1) * model.nv)
-
-        # subblock
-        dsidq01 = dsdq012[t][idx, 0 : (2 * model.nv)].reshape(
-            (dim, 2 * model.nv)
+        # dense row
+        hess_pq[:, (t - 1) * model.nv : (t + 2) * model.nv] += (
+            dsdp[t][idx, :].T @ normi_hess @ dsidq012
         )
 
-        # gradient
-        grad[idxt] += (dsidq01.T @ normi_grad).ravel()
-
-        # Hessian
-        blk = dsidq01.T @ normi_hess @ dsidq01
-        hess = add_block_in_band(
-            hess, blk, 1.0, ntotal, nband, 2 * model.nv, (t - 1) * model.nv
-        )
-      else:
-        # indices
-        idxt = slice((t - 1) * model.nv, (t + 2) * model.nv)
-
-        # subblock
-        dsidq012 = dsdq012[t][idx, :].reshape((dim, 3 * model.nv))
-
-        # gradient
-        grad[idxt] += (dsidq012.T @ normi_grad).ravel()
-
-        # Hessian
-        blk = dsidq012.T @ normi_hess @ dsidq012
-        hess = add_block_in_band(
-            hess, blk, 1.0, ntotal, nband, 3 * model.nv, (t - 1) * model.nv
-        )
-
-  return grad, hess
+  return grad_q, hess_qq, grad_p, hess_pq
 
 
 # %%
@@ -816,6 +748,7 @@ def configuration_update(
     update: npt.ArrayLike,
     step: float,
     horizon: int,
+    pinned: npt.ArrayLike,
 ) -> npt.ArrayLike:
   """Update configuration.
 
@@ -827,6 +760,7 @@ def configuration_update(
       update (npt.ArrayLike): search direction
       step (float): size of update to configurations
       horizon (int): number of timesteps
+      pinned(npt.ArrayLike): time indices of fixed qpos variables
 
   Returns:
       npt.ArrayLike: updated configuration trajectory
@@ -834,10 +768,20 @@ def configuration_update(
   qpos_new = np.zeros((model.nq, horizon))
 
   # loop over configurations
+  tpin = 0
   for t in range(horizon):
+    # current qpos
     q = np.array(qpos[:, t])
-    dq = update[(t * model.nv) : ((t + 1) * model.nv)]
-    mujoco.mj_integratePos(model, q, dq, step)
+
+    # skip pinned qpos
+    if not pinned[t]:
+      dq = update[(tpin * model.nv) : ((tpin + 1) * model.nv)]
+      mujoco.mj_integratePos(model, q, dq, step)
+
+      # increment
+      tpin += 1
+
+    # set new qpos
     qpos_new[:, t] = q
 
   return qpos_new
@@ -901,6 +845,7 @@ class DirectOptimizer:
     force_target: target qfrc_actuator values (nv x horizon).
     weights_sensor: weights for sensor norms (nsensor x horizon).
     weights_force: weights for force norms (nv x horizon).
+    pinned: time indices that qpos is fixed (horizon).
     _dvdq0: Jacobian of velocity wrt previous configuration ((nv x nv) x horizon).
     _dvdq1: Jacobian of velocity wrt current configuration ((nv x nv) x horizon).
     _dadq0: Jacobian of acceleration wrt previous configuration ((nv x nv) x horizon).
@@ -918,13 +863,15 @@ class DirectOptimizer:
     cost_force: sum of weighted force norms.
     cost_sensor: sum of weighted sensor norms.
     cost_initial: initial total cost.
-    _ntotal: number of decision variables (nv * horizon).
+    _ntotal: number of qpos variables (nv * horizon).
+    _ntotal_pin: number of decision variables (_ntotal - sum(pinned) * nv).
     _nband: cost Hessian band dimension (3 * nv).
+    _ndense: dense rows for band linear algebra methods.
     _gradient: gradient of cost wrt to decision variables (nv * horizon).
     _hessian: band representation of cost Hessian wrt decision variables (nv * horizon x 3 * nv).
     _hessian_factor: factorization of band represented cost Hessian
     _search_direction: Gauss-Newton search direction (nv * horizon).
-    _qpos_candidate: candidate search point for configuration trajectory (nq x horizon).
+    _qpos_copy: copy of configuration trajectory (nq x horizon).
     _regularization: current value for cost Hessian regularization.
     _gradient_norm: normalized L2-norm of cost gradient.
     _iterations_step: number of step iterations performed.
@@ -937,9 +884,25 @@ class DirectOptimizer:
     regularization_min: minimum regularization value.
     regularization_max: maximum regularization value.
     regularization_scale: value for increasing/decreasing regularization.
+    _parameter_flag: bool for valid parameter optimization.
+    _num_parameters: number of parameters as decision variables.
+    _model_update: Callable for updating model parameters.
+    _model_parameter: mjModel for updating model parameters.
+    parameter: parameter values (num_parameter).
+    parameter_target: target parameter values (num_parameter).
+    weight_parameter: scalar weight for parameter cost.
+    _parameter_copy: copy of parameters (num_parameter).
+    _dsdp: sensor Jacobian wrt parameters ((ns x np) x horizon).
+    _dfdp: force Jacobian wrt parameters ((nv x np) x horizon).
   """
 
-  def __init__(self, model: mujoco.MjModel, horizon: int):
+  def __init__(
+      self,
+      model: mujoco.MjModel,
+      horizon: int,
+      num_parameter: Optional[int] = 0,
+      parameter_update: Optional[Callable] = None,
+  ):
     """Construct direct optimizer.
 
     Args:
@@ -970,6 +933,9 @@ class DirectOptimizer:
     # weights
     self.weights_sensor = np.zeros((model.nsensor, horizon))
     self.weights_force = np.zeros((model.nv, horizon))
+
+    # pinned
+    self.pinned = np.zeros(horizon, dtype=bool)
 
     # finite-difference velocity and acceleration Jacobians (wrt configurations)
     self._dvdq0 = [np.zeros((model.nv, model.nv)) for t in range(horizon)]
@@ -1005,19 +971,28 @@ class DirectOptimizer:
     self.cost_initial = 0.0
 
     # cost derivatives
-    self._ntotal = model.nv * horizon
+    self._ntotal = model.nv * horizon + num_parameter
+    self._ntotal_pin = self._ntotal
     self._nband = 3 * model.nv
+    self._ndense = num_parameter
     self._gradient = np.zeros(self._ntotal)
-    self._hessian = np.zeros((self._ntotal, self._nband))
+
+    self._hessian = np.zeros(
+        (self._ntotal_pin - self._ndense) * self._nband
+        + self._ndense * self._ntotal_pin
+    )
 
     # cost Hessian factor
-    self._hessian_factor = np.zeros((self._ntotal, self._nband))
+    self._hessian_factor = np.zeros(
+        (self._ntotal_pin - self._ndense) * self._nband
+        + self._ndense * self._ntotal_pin
+    )
 
     # search direction
     self._search_direction = np.zeros(self._ntotal)
 
     # candidate qpos
-    self._qpos_candidate = np.zeros((model.nq, horizon))
+    self._qpos_copy = np.zeros((model.nq, horizon))
 
     # regularization
     self._regularization = 1.0e-12
@@ -1039,17 +1014,45 @@ class DirectOptimizer:
     self.regularization_max = 1.0e12
     self.regularization_scale = np.sqrt(10.0)
 
-  def cost(self, qpos: npt.ArrayLike) -> float:
+    # parameters
+    if num_parameter > 0 and parameter_update is not None:
+      self._parameter_flag = True
+    else:
+      self._parameter_flag = False
+
+    self.cost_parameter = 0.0
+    self._num_parameter = num_parameter
+    self._parameter_update = parameter_update
+    self._model_update = self.model.__copy__()
+    self.parameter = np.zeros(num_parameter)
+    self.parameter_target = np.zeros(num_parameter)
+    self.weight_parameter = 0.0
+    self._parameter_copy = np.zeros(num_parameter)
+    self._dsdp = [
+        np.zeros((model.nsensordata, num_parameter)) for t in range(horizon)
+    ]
+    self._dfdp = [np.zeros((model.nv, num_parameter)) for t in range(horizon)]
+
+  def cost(
+      self, qpos: npt.ArrayLike, parameter: Optional[npt.ArrayLike] = None
+  ) -> float:
     """Return total cost (force + sensor)
 
     Args:
         qpos (npt.ArrayLike): trajectory of configurations
+        parameter (npt.ArrayLike): model parameters
 
     Returns:
         float: total cost (sensor + force)
     """
+    # set parameters
+    if self._parameter_flag and parameter is not None:
+      self._parameter_update(self.model, parameter)
+
     # compute finite-difference velocity and acceleration
-    self.qvel, self.qacc = qpos_to_qvel_qacc(self.model, qpos, self.horizon)
+    self.qvel, self.qacc = qpos_to_qvel_qacc(
+        self.model, self.qpos, self.horizon
+    )
 
     # evaluate inverse dynamics
     self.sensor, self.force = inverse_dynamics(
@@ -1082,19 +1085,36 @@ class DirectOptimizer:
     # total cost
     self.cost_total = self.cost_force + self.cost_sensor
 
+    # parameter cost
+    if self._parameter_flag:
+      # quadratic cost
+      parameter_error = self.parameter - self.parameter_target
+      self.cost_parameter = (
+          0.5 * self.weight_parameter * np.dot(parameter_error, parameter_error)
+      )
+
+      # update total
+      self.cost_total += self.cost_parameter
+
     return self.cost_total
 
   def _cost_derivatives(
       self,
       qpos: npt.ArrayLike,
+      parameter: Optional[npt.ArrayLike] = None,
   ):
     """Compute total cost derivatives.
 
     Args:
         qpos (npt.ArrayLike): trajectory of configurations
+        parameter (npt.ArrayLike): model parameters
     """
+    # model parameters
+    if self._parameter_flag and parameter is not None:
+      self._parameter_update(self.model, parameter)
+
     # evaluate cost to compute intermediate values
-    self.cost(qpos)
+    self.cost(qpos, parameter)
 
     # finite-difference Jacobians
     (
@@ -1126,6 +1146,22 @@ class DirectOptimizer:
         self.horizon,
     )
 
+    # inverse dynamics Jacobians wrt parameters
+    if self._parameter_flag:
+      self._dsdp, self._dfdp = diff_inverse_dynamics_parameters(
+          self.model,
+          self._model_update,
+          self.data,
+          qpos,
+          self.qvel,
+          self.qacc,
+          self.sensor,
+          self.force,
+          self.parameter,
+          self._parameter_update,
+          self.horizon,
+      )
+
     # force derivatives
     self._dfdq012 = diff_force(
         self.model,
@@ -1155,27 +1191,101 @@ class DirectOptimizer:
     )
 
     # force cost derivatives
-    force_gradient, force_hessian = diff_cost_force(
+    fq, fqq, fp, fpq = diff_cost_force(
         self.model,
         self.force,
         self.force_target,
         self.weights_force,
         self._dfdq012,
         self.horizon,
+        self._dfdp if self._parameter_flag else None,
     )
 
     # sensor cost derivatives
-    sensor_gradient, sensor_hessian = diff_cost_sensor(
+    sq, sqq, sp, spq = diff_cost_sensor(
         self.model,
         self.sensor,
         self.sensor_target,
         self.weights_sensor,
         self._dsdq012,
         self.horizon,
+        self._dsdp if self._parameter_flag else None,
     )
 
-    self._gradient = force_gradient + sensor_gradient
-    self._hessian = force_hessian + sensor_hessian
+    # dimension
+    nv = self.model.nv
+    ndq = nv * self.horizon
+    ndq_pin = ndq - nv * np.sum(self.pinned)
+
+    # parameters
+    dense = None
+    if self._parameter_flag:
+      dense = np.zeros((self._num_parameter, self._ntotal_pin))
+
+    # total gradient, Hessian
+    hess = np.zeros((self._ntotal_pin, self._nband))
+    tpin = 0
+    for t in range(self.horizon):
+      # slices
+      idx_t = slice(t * nv, (t + 1) * nv)
+      idx_tpin = slice(tpin * nv, (tpin + 1) * nv)
+
+      if self.pinned[t]:
+        # gradient
+        fq[idx_t] = 0.0
+        sq[idx_t] = 0.0
+
+        # Hessian
+        fqq[idx_t, :] = 0.0
+        sqq[idx_t, :] = 0.0
+
+        if t + 1 < self.horizon:
+          idx_tt = slice((t + 1) * nv, (t + 2) * nv)
+          idx_c1 = slice(nv, 2 * nv)
+
+          fqq[idx_tt, idx_c1] = 0.0
+          sqq[idx_tt, idx_c1] = 0.0
+
+        if t + 2 < self.horizon:
+          idx_ttt = slice((t + 2) * nv, (t + 3) * nv)
+          idx_c0 = slice(0, nv)
+
+          fqq[idx_ttt, idx_c0] = 0.0
+          sqq[idx_ttt, idx_c0] = 0.0
+
+        continue
+
+      # set data
+      self._gradient[idx_tpin] = fq[idx_t] + sq[idx_t]
+      hess[idx_tpin, :] = fqq[idx_t, :] + sqq[idx_t, :]
+
+      # parameter
+      if self._parameter_flag:
+        dense[:, idx_tpin] = fpq[:, idx_t] + spq[:, idx_t]
+
+      # increment
+      tpin += 1
+
+    # set hessian
+    self._hessian[:] = 0.0
+    self._hessian[: (self._ntotal_pin * self._nband)] = hess.ravel()
+
+    # parameters
+    if self._parameter_flag:
+      # gradient
+      self._gradient[ndq_pin:] = (
+          fp
+          + sp
+          + self.weight_parameter * (self.parameter - self.parameter_target)
+      )
+
+      # Hessian
+      dense[:, ndq_pin:] = self.weight_parameter * np.eye(self._num_parameter)
+
+      # dense rows
+      ndense = self._num_parameter * (ndq_pin + self._num_parameter)
+      idx = ndq_pin * self._nband
+      self._hessian[idx : (idx + ndense)] = dense.ravel()
 
   def _eval_search_direction(self) -> bool:
     """Compute search direction.
@@ -1185,17 +1295,29 @@ class DirectOptimizer:
     """
     # factorize cost Hessian
     self._hessian_factor = np.array(self._hessian.ravel())
-    min_diag = mujoco.mju_cholFactorBand(
-        self._hessian_factor,
-        self._ntotal,
-        self._nband,
-        0,
-        self._regularization,
-        0.0,
-    )
+    while self._regularization < self.regularization_max:
+      # attempt factorization
+      min_diag = mujoco.mju_cholFactorBand(
+          self._hessian_factor,
+          self._ntotal_pin,
+          self._nband,
+          self._ndense,
+          self._regularization,
+          0.0,
+      )
+
+      # check factorization
+      if min_diag > 0.0:
+        break
+
+      # increase regularization
+      self._regularization = np.minimum(
+          self.regularization_max,
+          self._regularization * self.regularization_scale,
+      )
 
     # check rank deficient
-    if min_diag < 1.0e-16:
+    if self._regularization >= self.regularization_max:
       self._status_msg = "rank deficient cost Hessian"
       return False
 
@@ -1204,10 +1326,15 @@ class DirectOptimizer:
         self._search_direction,
         self._hessian_factor,
         self._gradient,
-        self._ntotal,
+        self._ntotal_pin,
         self._nband,
-        0,
+        self._ndense,
     )
+
+    # update Hessian w/ regularization
+    # TODO(taylor): parameters are not regularized
+    for i in range(self.model.nv * (self.horizon - np.sum(self.pinned))):
+      self._hessian[i * self._nband + self._nband - 1] += self._regularization
 
     # check small direction
     if (
@@ -1227,14 +1354,14 @@ class DirectOptimizer:
     """
     # compute expected = g' d + 0.5 d' H d
     expected = np.dot(self._gradient, self._search_direction)
-    tmp = np.zeros(self._ntotal)
+    tmp = np.zeros(self._ntotal_pin)
     mujoco.mju_bandMulMatVec(
         tmp,
         self._hessian,
         self._search_direction,
-        self._ntotal,
+        self._ntotal_pin,
         self._nband,
-        0,
+        self._ndense,
         1,
         1,
     )
@@ -1271,8 +1398,23 @@ class DirectOptimizer:
     self._iterations_step = 0
     self._iterations_search = 0
 
+    # ntotal pinned
+    self._ntotal_pin = self._ntotal - np.sum(self.pinned) * self.model.nv
+
+    # resize
+    self._gradient.resize(self._ntotal_pin)
+    self._hessian.resize(
+        (self._ntotal_pin - self._ndense) * self._nband
+        + self._ndense * self._ntotal_pin
+    )
+    self._hessian_factor.resize(
+        (self._ntotal_pin - self._ndense) * self._nband
+        + self._ndense * self._ntotal_pin
+    )
+    self._search_direction.resize(self._ntotal_pin)
+
     # initial cost
-    self.cost_initial = self.cost(self.qpos)
+    self.cost_initial = self.cost(self.qpos, self.parameter)
     current_cost = self.cost_initial
 
     # reset regularization
@@ -1284,13 +1426,18 @@ class DirectOptimizer:
       self._iterations_step = i
 
       # compute search direction
-      self._cost_derivatives(self.qpos)
+      self._cost_derivatives(self.qpos, self.parameter)
 
       # check gradient tolerance
-      self._gradient_norm = np.linalg.norm(self._gradient) / self._ntotal
+      self._gradient_norm = np.linalg.norm(self._gradient) / self._ntotal_pin
       if self._gradient_norm < self.gradient_tolerance:
         self._status_msg = "gradient tolerance achieved"
         return
+
+      # copy variables
+      self._qpos_copy = np.copy(self.qpos)
+      if self._parameter_flag:
+        self._parameter_copy = np.copy(self.parameter)
 
       # search iterations
       candidate_cost = current_cost
@@ -1309,26 +1456,33 @@ class DirectOptimizer:
         if not self._eval_search_direction():
           return
 
-        # compute candidate
-        self._qpos_candidate = configuration_update(
+        # compute new variables
+        self.qpos = configuration_update(
             self.model,
-            self.qpos,
+            self._qpos_copy,
             self._search_direction,
             -1.0,
             self.horizon,
+            self.pinned,
         )
 
+        if self._parameter_flag:
+          self.parameter = (
+              self._parameter_copy
+              - 1.0
+              * self._search_direction[
+                  self.model.nv * (self.horizon - np.sum(self.pinned)) :
+              ]
+          )
+
         # candidate cost
-        candidate_cost = self.cost(self._qpos_candidate)
+        candidate_cost = self.cost(self.qpos, self.parameter)
         self._improvement = current_cost - candidate_cost
 
         # check improvement
         if candidate_cost < current_cost:
           # update cost
           current_cost = candidate_cost
-
-          # update configurations
-          self.qpos = np.array(self._qpos_candidate)
           break
         else:
           # increase regularization
@@ -1354,6 +1508,8 @@ class DirectOptimizer:
     print(" total          :", self.cost_total)
     print(" sensor         :", self.cost_sensor)
     print(" force          :", self.cost_force)
+    if self._parameter_flag:
+      print(" parameter      :", self.cost_parameter)
     print(" initial        :", self.cost_initial)
     print("\n")
     print(" iterations")
@@ -1362,7 +1518,7 @@ class DirectOptimizer:
     print("\n")
     print(
         " gradient norm  :",
-        np.linalg.norm(self._gradient) / self._ntotal,
+        np.linalg.norm(self._gradient) / self._ntotal_pin,
     )
     print(" regularization :", self._regularization)
     print("\n")

@@ -29,7 +29,6 @@
 #include <vector>
 
 #include <absl/flags/flag.h>
-#include <absl/strings/match.h>
 #include <mujoco/mujoco.h>
 #include <glfw_adapter.h>
 #include "mjpc/array_safety.h"
@@ -40,7 +39,6 @@
 #include "mjpc/threadpool.h"
 #include "mjpc/utilities.h"
 
-ABSL_FLAG(std::string, task, "", "Which model to load on startup.");
 ABSL_FLAG(bool, planner_enabled, false,
           "If true, the planner will run on startup");
 ABSL_FLAG(float, sim_percent_realtime, 100,
@@ -414,18 +412,7 @@ MjpcApp::MjpcApp(std::vector<std::shared_ptr<mjpc::Task>> tasks, int task_id) {
       std::make_shared<Agent>());
 
   sim->agent->SetTaskList(std::move(tasks));
-  std::string task_name = absl::GetFlag(FLAGS_task);
-  if (task_name.empty()) {
-    sim->agent->gui_task_id = task_id;
-  } else {
-    sim->agent->gui_task_id = sim->agent->GetTaskIdByName(task_name);
-    if (sim->agent->gui_task_id == -1) {
-      std::cerr << "Invalid --task flag: '" << task_name
-                << "'. Valid values:\n";
-      std::cerr << sim->agent->GetTaskNames();
-      mju_error("Invalid --task flag.");
-    }
-  }
+  sim->agent->gui_task_id = task_id;
 
   sim->filename = sim->agent->GetTaskXmlPath(sim->agent->gui_task_id);
   m = LoadModel(sim->agent.get(), *sim);
