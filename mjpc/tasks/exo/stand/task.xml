@@ -1,0 +1,46 @@
+<mujoco model="MARCH exo">
+  <include file="../../common.xml"/>
+  <!-- modified from: https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/humanoid.xml -->
+  <size memory="400K" nuser_sensor="40"/>
+
+  <custom>
+    <numeric name="agent_planner" data="5" />
+    <numeric name="agent_horizon" data="0.2" />
+    <numeric name="agent_timestep" data="0.02" />
+    <numeric name="sampling_spline_points" data="3" />
+    <numeric name="sampling_exploration" data="0.05" />
+    <numeric name="gradient_spline_points" data="5" />
+    <numeric name="residual_Height Goal Yeah" data="10 0.0 10" />
+  </custom>
+
+  <sensor>
+    <!-- <user name="Balance" dim="1" user="6 0.0 0.0 100 0.1" />  -->
+    <user name="Torso Angle" dim="1" user="0 10 0 20 0.1" />
+    <!-- <user name="CoM Velocity" dim="2" user="0 10 0 20" /> -->
+    <user name="Joint Velocity" dim="10" user="0 0.2 0.0 0.2" />
+    <user name="Control" dim="8" user="0 1.0 0.0 20 0.3" />
+    <!-- <user name="Feet Level" dim="1" user="6 10 0 20 0.1" />  -->
+    <user name="Balanced Stance" dim="10" user="0 10.0 0 20" />
+    <!-- <user name="Centroidal Momentum" dim="3" user="0 0 0 100" /> -->
+    <user name="Torso Angular Velocity" dim="3" user="0 0.2 0 20" />
+    <user name="Torso Linear Acceleration" dim="3" user="0 0.0 0 0.1" />
+    <user name="Centroidal Momentum" dim="1" user="0 0.0 0 1" />
+  </sensor>
+
+  <include file="../exo_no_mesh.xml" />
+
+  <sensor>
+    <!-- COM sensors -->
+    <subtreecom name="torso_subtreecom" body="backpack"/>
+    <subtreelinvel name="torso_subtreelinvel" body="backpack"/>
+    <subtreeangmom name="torso_subtreeangmom" body="backpack"/>
+    <subtreeangmom name="leftleg_subtreeangmom" body="L_hip"/>
+    <subtreeangmom name="rightleg_subtreeangmom" body="R_hip"/>
+
+    <!-- Orientation sensors -->
+    <framequat name="backpack_orientation_body" objtype="body" objname="backpack"/>
+
+    <gyro name="imu_backpack" site="imu_backpack"/>
+
+  </sensor>
+</mujoco>

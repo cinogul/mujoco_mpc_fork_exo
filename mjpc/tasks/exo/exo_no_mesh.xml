@@ -1,0 +1,299 @@
+<mujoco model='exoskeleton'>
+            <compiler meshdir="obj-files" angle="degree" autolimits="true"/>
+            <size nuser_actuator='1' nuser_sensor='8' nuser_geom='1'/>
+            <option timestep='0.015' iterations='25' solver='CG' gravity='0 0 -9.81'>
+                <flag multiccd="enable" energy="enable"/>
+            </option>
+
+            <visual>
+                <map force="0.1" zfar="30"/>
+                <rgba haze="0.15 0.25 0.35 1"/>
+                <quality shadowsize="4096"/>
+                <global offwidth="800" offheight="800"/>
+            </visual>
+                    
+            <!-- Nested defaults for exoskeleton, collisions, and joints -->
+            <default>
+                <default class="exoskeleton">
+                <geom material="march_grey" group="2" contype="0" conaffinity="0"/>
+                </default>
+
+                <default class="collision">
+                <geom type="capsule" group="3" contype="1" conaffinity="1"/>
+                </default>
+
+                <default class="L_collision">
+                <geom type="capsule" group="3" contype="2" conaffinity="4"/>
+                </default>
+
+                <default class="R_collision">
+                <geom type="capsule" group="3" contype="4" conaffinity="2"/>
+                </default>
+
+                <default class="HAA_joint">
+                <joint damping="107.692308" armature="5.4" frictionloss="0" stiffness="0"/>
+                </default>
+
+                <default class="ADPF_joint">
+                <joint damping="43.658537" armature="2.2" frictionloss="0" stiffness="0"/>
+                </default>
+
+                <default class="rotational_joint">
+                <joint damping="63.451777" armature="9.98" frictionloss="0" stiffness="0"/>
+                </default>
+
+                <default class="AIE_joint">
+                <joint damping="63.451777" armature="2.2" frictionloss="0" stiffness="0"/>
+                </default>
+            </default>
+        
+            <asset>
+                <texture type="skybox" builtin="gradient" rgb1=".3 .5 .7" rgb2="0 0 0" width="512" height="512"/>
+                <texture name="body" type="cube" builtin="flat" mark="cross" width="127" height="1278"
+                        rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" markrgb="1 1 1" random="0.01"/>
+                <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+                <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+                <material name="march_grey" rgba=".87 .89 .91 1"/>
+                <material name="collision" rgba="1 0 0 1"/>
+
+                <mesh name="backpack"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/Backpack.obj"/>
+                <mesh name="L_Ankle"     file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Ankle.obj"/>
+                <mesh name="L_Hip"       file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Hip.obj"/>
+                <mesh name="L_UpperLeg"  file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_UpperLeg.obj"/>
+                <mesh name="L_LowerLeg"  file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_LowerLeg.obj"/>
+                <mesh name="L_Sole"      file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Sole.obj"/>
+
+                <mesh name="R_Ankle"     scale="1 -1 1"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Ankle.obj"/>
+                <mesh name="R_Hip"       scale="1 -1 1"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Hip.obj"/>
+                <mesh name="R_UpperLeg"  scale="1 -1 1"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_UpperLeg.obj"/>
+                <mesh name="R_LowerLeg"  scale="1 -1 1"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_LowerLeg.obj"/>
+                <mesh name="R_Sole"      scale="1 -1 1"    file="/home/project-march-pc/march-x/ros2_ws/install/march_bringup/share/march_bringup/description/march9/obj-files/L_Sole.obj"/>
+            </asset>
+        
+            <actuator>
+                <!-- User parameter is the maximum no-load motor RPM -->
+                <motor name="left_ankle_dpf"    gear="195"  joint="left_ankle_dpf" forcerange="-180 180" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="left_hip_aa"     gear="390"  joint="left_hip_aa" forcerange="-340 340" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="left_hip_fe"     gear="300" joint="left_hip_fe" forcerange="-250 250" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="left_knee"     gear="300"  joint="left_knee" forcerange="-250 250" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="right_ankle_dpf"    gear="195"  joint="right_ankle_dpf" forcerange="-180 180" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="right_hip_aa"     gear="390"  joint="right_hip_aa" forcerange="-340 340" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="right_hip_fe"     gear="300" joint="right_hip_fe" forcerange="-250 250" forcelimited="true" ctrlrange="-1 1"/>
+                <motor name="right_knee"     gear="300"  joint="right_knee" forcerange="-250 250" forcelimited="true" ctrlrange="-1 1"/>
+            </actuator>
+            
+            <sensor>
+                <!-- User parameter is the number of absolute encoder bits -->
+                <!-- encodersoutput position; connected to the actuator -->
+                <jointpos name="L_ADPF_pos_output" joint="left_ankle_dpf" user="18" noise="000"/>
+                <jointpos name="L_AIE_pos_output" joint="left_ankle_ie" user="18" noise="000"/>
+                <jointpos name="L_HAA_pos_output" joint="left_hip_aa" user="18" noise="000"/>
+                <jointpos name="L_HFE_pos_output" joint="left_hip_fe" user="18" noise="000"/>
+                <jointpos name="L_KFE_pos_output" joint="left_knee" user="18" noise="000"/>
+                <jointpos name="R_ADPF_output" joint="right_ankle_dpf" user="18" noise="000"/>
+                <jointpos name="R_AIE_output" joint="right_ankle_ie" user="18" noise="000"/>
+                <jointpos name="R_HAA_output" joint="right_hip_aa" user="18" noise="000"/>
+                <jointpos name="R_HFE_output" joint="right_hip_fe" user="18" noise="000"/>
+                <jointpos name="R_KFE_output" joint="right_knee" user="18" noise="000"/>
+                <!-- encodersoutput velocity; connected to the actuator -->
+                <jointvel name="left_ankle_dpf_vel_output" joint="left_ankle_dpf" user="18" noise="000"/>
+                <jointvel name="left_hip_aa_vel_output" joint="left_hip_aa" user="18" noise="000"/>
+                <jointvel name="left_hip_fe_vel_output" joint="left_hip_fe" user="18" noise="000"/>
+                <jointvel name="left_knee_vel_output" joint="left_knee" user="18" noise="000"/>
+                <jointvel name="right_ankle_dpf_vel_output" joint="right_ankle_dpf" user="18" noise="000"/>
+                <jointvel name="right_hip_aa_vel_output" joint="right_hip_aa" user="18" noise="000"/>
+                <jointvel name="right_hip_fe_vel_output" joint="right_hip_fe" user="18" noise="000"/>
+                <jointvel name="right_knee_vel_output" joint="right_knee" user="18" noise="000"/>
+                <!-- torque sensors; connected to the actuator-->
+
+            <!--    TODO: This could also be of the type actuatorvel -->
+                <torque name="left_ankle_dpf_tor_output" site="tor_L_ADPF" user="13" noise="000"/>
+                <torque name="left_hip_aa_tor_output" site="tor_L_HAA" user="13" noise="000"/>
+                <torque name="right_ankle_dpf_tor_output" site="tor_R_ADPF" user="13" noise="000"/>
+                <torque name="right_hip_aa_tor_output" site="tor_R_HAA" user="13" noise="000"/>
+
+                <!-- Noise & cutoff must be determined -->
+                <framequat name='backpack_orientation' objtype='site' objname='imu_backpack'/>
+                <gyro name='vel_imu_backpack' site='imu_backpack' noise='5e-4' cutoff='34.9'/>
+                <accelerometer name='acc_imu_backpack' site='imu_backpack' noise='1e-5' cutoff='157'/>
+            </sensor>
+            <keyframe><key name='stand' qpos='0 0 1.05 1 0 0 0 0 0 0 0 0 0 0 0 0 0'/></keyframe><worldbody><geom name='floor' size='0 0 .05' type='plane' material='grid' pos='0 0 0' conaffinity='15' condim='6' solref='0.000002 1' solimp='0.99 0.999 0.000001' friction='3 0.005 0.0001'/><light name='spotlight' mode='targetbodycom' target='backpack' diffuse='.8 .8 .8' specular='0.3 0.3 0.3' pos='0 -20 4' cutoff='10'/>
+            <body name="safety_catcher" pos="0 0 1.05">
+            <inertial pos="0 0 0" mass="0.1" diaginertia="10 10 10"/>
+            
+            <joint name='safety_catch_free' type='free'/>
+                   
+            <body name="backpack" pos="0 0 0" childclass="exoskeleton">
+                <light name="top" pos="0 0 2" mode="trackcom"/>
+                <camera name="diag" pos="3 -2.5 1" xyaxes="1 1 0 0 1 2" mode="track"/>
+                <camera name="right" pos="0 -3 1" xyaxes="1 0 0 0 1 2" mode="track"/>
+                <camera name="feet" pos="1.5 0 -0.9"  xyaxes="0 0 -1 0 1 0" mode="track"/>
+                <site name='imu_backpack' size='0.01' pos="0 0 0"/>
+
+                <inertial pos="0.015 0 0.185" mass="4.188"
+                        fullinertia="0.1438 0.0429 0.1021 0.000 0.0004 0.0002"/>
+                <geom type="mesh" mesh="backpack" />
+                <geom name="backpack" type="box"
+                    size="0.051 0.189 0.165"
+                    pos="0 0 0.17" class="collision"/>
+
+                <site name="imu_torso" size='0.01' pos="0.2 0 0.4"/>
+
+                
+
+                <!--  LEFT LEG -->
+                <body name="L_hip" pos="0.021 0.092 0.028">
+                <inertial 
+                    mass="3.732"
+                    pos="0.130 0.174 0.000" 
+                    fullinertia="0.0146 0.0255 0.0321 -0.0106 0.0000 0.000"/>
+                <joint name="left_hip_aa" axis="-1 0 0" range="-45 45" class="HAA_joint" />
+                <geom type="mesh" mesh="L_Hip" />
+                <geom name="L_hip" fromto="0 0 0 0.169 0.173 0"
+                    size="0.032" class="L_collision"/>
+                <site name="tor_L_HAA" size="0.01" pos="0 0 0"/>
+
+                <body name="L_UL" pos="0.169 0.173 0">
+                    <inertial 
+                    mass="1.999"
+                    pos="0.000 -0.044 -0.408" 
+                    fullinertia="0.0816 0.0831 0.0069 0.0000 0.0000 -0.0115"/>
+                    <joint name="left_hip_fe" axis="0 -1 0" range="-20 115" class="rotational_joint" />
+                    <geom type="mesh" mesh="L_UpperLeg"/>
+                    <geom name="L_UL" fromto="0 0 0 0 -0.077 -0.478"
+                    size="0.069" class="L_collision"/>
+                    <site name="tor_L_HFE" size="0.01" pos="0 0 0"/>
+
+                    
+
+                    <body name="L_LL" pos="0 -0.077 -0.478">
+                    <inertial 
+                        mass="2.078"
+                        pos="-0.049 0.000 -0.269" 
+                        fullinertia="0.0388 0.0427 0.0046 -0.0005 -0.0049 -0.0015"/>
+                    <joint name="left_knee" axis="0 1 0" range="0 125" class="rotational_joint" />
+                    <geom type="mesh" mesh="L_LowerLeg"/>
+                    <site name="tor_L_KFE" size="0.01" pos="0 0 0"/>
+                    <geom name="L_LL" fromto="0 0 0 0.000 -0.016 -0.474"
+                        size="0.047" class="L_collision"/>
+
+                    
+
+                    <body name="L_ankle" pos="0.000 -0.016 -0.474">
+                        <inertial 
+                        mass="0.683"
+                        pos="0.070 0.043 -0.002" 
+                        fullinertia="0.0011 0.0043 0.0047 -0.0010 -0.0006 -0.0003"/>
+                        <joint name="left_ankle_dpf" axis="0 -1 0" range="-28 20" class="ADPF_joint"/>
+                        <geom type="mesh" mesh="L_Ankle"/>
+                        <site name="tor_L_ADPF" size="0.01" pos="0 0 0"/>
+
+                        <body name="L_foot" pos="-0.093 -0.061 -0.025">
+                        <inertial
+                            mass="0.589" 
+                            pos="0.139 0.001 -0.052" 
+                            fullinertia="0.0016 0.0077 0.0083 0.000 -0.0001 0.000"/>
+                        <joint name="left_ankle_ie" axis="1 0 0" range="-9 9" class="AIE_joint"/>
+                        <geom type="mesh" mesh="L_Sole"/>
+                        <site name="tor_L_AIE" size="0.01" pos="0 0 0"/>
+
+                        <geom name="L_foot" type="box" size="0.166 0.07 0.035"
+                            pos="0.151 0 -.045"  class="L_collision"
+                            friction="3.0"/>
+
+                        <site name="sp0" pos="0 -0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- back right -->
+                        <site name="sp1" pos="0  0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- back left -->
+                        <site name="sp2" pos=".317 -0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- front right -->
+                        <site name="sp3" pos=".317 0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- front left -->
+
+                        
+
+                        </body>
+                    </body>
+                    </body>
+                </body>
+                </body>
+
+                <!--  RIGHT LEG -->
+                <body name="R_hip" pos="0.021 -0.092 0.028">
+                <inertial 
+                    mass="3.732"
+                    pos="0.130 -0.174 0.000" 
+                    fullinertia="0.0146 0.0255 0.0321 0.0106 0.000 0.000"/>
+                <joint name="right_hip_aa" axis="1 0 0" range="-45 45" class="HAA_joint" />
+                <geom type="mesh" mesh="R_Hip" />
+                <geom name="R_hip" fromto="0 0 0 0.169 -0.173 0"
+                    size="0.032" class="R_collision"/>
+                <site name="tor_R_HAA" size="0.01" pos="0 0 0"/>
+
+                <body name="R_UL" pos="0.169 -0.173 0">
+                    <inertial 
+                    mass="1.999"
+                    pos="0.000 0.044 -0.408"
+                    fullinertia="0.0816 0.0831 0.0069 0.0000 0.0000 0.0115"/>
+                    <joint name="right_hip_fe" axis="0 -1 0" range="-20 115" class="rotational_joint" />
+                    <geom type="mesh" mesh="R_UpperLeg"/>
+                    <geom name="R_UL" fromto="0 0 0 0 0.077 -0.478"
+                    size="0.069" class="R_collision"/>
+                    <site name="tor_R_HFE" size="0.01" pos="0 0 0"/>
+
+                    
+
+                    <body name="R_LL" pos="0 0.077 -0.468">
+                    <inertial 
+                        mass="2.078"
+                        pos="-0.049 0.000 -0.269"
+                        fullinertia="0.0388 0.0427 0.0046 0.0005 -0.0049 0.0015"/>
+                    <joint name="right_knee" axis="0 1 0" range="0 125" class="rotational_joint" />
+                    <geom type="mesh" mesh="R_LowerLeg"/>
+                    <geom name="R_LL" fromto="0 0 0 0.000 0.016 -0.474"
+                        size="0.047" class="R_collision"/>
+                    <site name="tor_R_KFE" size="0.01" pos="0 0 0"/>
+
+                    
+
+                    <body name="R_ankle" pos="0.000 0.016 -0.474">
+                        <inertial 
+                        mass="0.683"
+                        pos="0.070 -0.043 -0.002"
+                        fullinertia="0.0011 0.0043 0.0047 0.0010 -0.0006 0.0003"/>
+                        <joint name="right_ankle_dpf" axis="0 -1 0" range="-28 20" class="ADPF_joint"/>
+                        <geom type="mesh" mesh="R_Ankle"/>
+                        <site name="tor_R_ADPF" size="0.01" pos="0 0 0"/>
+
+                        <body name="R_foot" pos="-0.093 0.061 -0.025">
+                        <inertial 
+                            mass="0.589"
+                            pos="0.139 -0.001 -0.052" 
+                            fullinertia="0.0016 0.0077 0.0083 0.000 -0.0001 0.000"/>
+                        <joint name="right_ankle_ie" axis="-1 0 0" range="-9 9" class="AIE_joint"/>
+                        <geom type="mesh" mesh="R_Sole"/>
+                        <site name="tor_R_AIE" size="0.01" pos="0 0 0"/>
+
+                        <geom name="R_foot" type="box" size="0.166 0.07 0.035"
+                            pos="0.151 0 -.045" class="R_collision"
+                            friction="3.0"/>
+
+                        <site name="sp4" pos="0 0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- back left -->
+                        <site name="sp5" pos="0 -0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- back right -->
+                        <site name="sp6" pos=".317 0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- front left -->
+                        <site name="sp7" pos=".317 -0.035 0" type="sphere" size=".027" group="10"/>
+                        <!-- front right -->
+
+                        
+
+                        </body>
+                    </body>
+                    </body>
+                </body>
+                </body>
+            </body>
+            </body>
+        </worldbody></mujoco>
